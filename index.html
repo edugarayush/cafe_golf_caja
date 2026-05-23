@@ -241,7 +241,44 @@
 
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbw0BTkay6iDl9Lm5tZXHocwNaHda-tK8qoGCAI9Q4ljiWT5OnQt5o4vvUjQhO5YmiFL/exec';
+const LS_KEY = 'hoyo19_historial';
 let socioActual = null, qty = 1, historial = [];
+
+// ── localStorage ──────────────────────────────────────────
+function fechaHoy() {
+  return new Date().toISOString().slice(0, 10); // "2026-05-23"
+}
+
+function cargarHistorialLocal() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const todos = JSON.parse(raw);
+    const hoy = fechaHoy();
+    // Solo mostrar los de hoy en el historial del turno
+    historial = (todos[hoy] || []);
+    renderHistorial();
+    // Limpiar entradas con más de 30 días
+    const limite = new Date();
+    limite.setDate(limite.getDate() - 30);
+    Object.keys(todos).forEach(fecha => {
+      if (new Date(fecha) < limite) delete todos[fecha];
+    });
+    localStorage.setItem(LS_KEY, JSON.stringify(todos));
+  } catch(e) { console.warn('Error cargando historial:', e); }
+}
+
+function guardarMovimientoLocal(mov) {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    const todos = raw ? JSON.parse(raw) : {};
+    const hoy = fechaHoy();
+    if (!todos[hoy]) todos[hoy] = [];
+    todos[hoy].unshift(mov);
+    localStorage.setItem(LS_KEY, JSON.stringify(todos));
+  } catch(e) { console.warn('Error guardando historial:', e); }
+}
+// ─────────────────────────────────────────────────────────
 
 function buscar() {
   const dni = document.getElementById('dniInput').value.trim();
@@ -311,7 +348,9 @@ function dispensarUno(restantes, callback) {
   if (restantes <= 0) {
     const ahora = new Date();
     const hora = ahora.getHours().toString().padStart(2,'0') + ':' + ahora.getMinutes().toString().padStart(2,'0');
-    historial.unshift({ nombre: socioActual.nombre, hora, qty: qty - restantes, restantes: socioActual.cafes });
+    const mov = { nombre: socioActual.nombre, dni: socioActual.dni, hora, qty: qty - restantes, restantes: socioActual.cafes };
+    historial.unshift(mov);
+    guardarMovimientoLocal(mov); // 💾 persistir
     renderHistorial();
     showToast('☕ ' + qty + ' café' + (qty>1?'s':'') + ' servido' + (qty>1?'s':'') + ' a ' + socioActual.nombre);
     qty = 1; document.getElementById('qtyNum').textContent = 1;
@@ -438,6 +477,9 @@ function buildInformeHTML(totalCafes, totalSocios, primerMov, ultimoMov, franjas
 
 document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this) cerrarInforme(); });
 document.getElementById('dniInput').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
+
+// ── INIT: cargar historial del día desde localStorage ──
+cargarHistorialLocal();
 </script>
 </body>
 </html>
